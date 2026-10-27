@@ -106,8 +106,7 @@ class HybridAuthEngine:
         # 4. Classical Hybrid Authentication Verification
         mitm_runner = MitMAttack()
         mitm_test = mitm_runner.execute_attack(
-            alice_key=alice_key,
-            bob_key=bob_key,
+            num_qubits=num_qubits,
             original_plaintext="CONFIDENTIAL_TRANSACTION_PAYLOAD",
             is_authenticated=True,
             auth_key=self.auth_key
