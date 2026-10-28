@@ -144,7 +144,7 @@ class B92Protocol:
             int_res = InterceptResult(
                 intercepted=intercepted_flags,
                 eve_bases=eve_bases,
-                eve_bits=[None] * num_qubits,
+                eve_bits=eve_raw if eve_raw else [None] * num_qubits,
                 interception_rate=sum(intercepted_flags) / num_qubits,
                 total_qubits=num_qubits,
                 qubits_intercepted_count=sum(intercepted_flags)

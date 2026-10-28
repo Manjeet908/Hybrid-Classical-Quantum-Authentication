@@ -28,18 +28,25 @@ def render_simulator_view():
             "Protocol Architecture",
             ["BB84 (4-State)", "B92 (2-State Non-Orthogonal)", "E91 (EPR Bell Entanglement)"]
         )
-        # ["BB84 (4-State)", "B92 (2-State Non-Orthogonal)", "E91 (EPR Bell Entanglement)", "Adaptive Hybrid"]
 
     with col_attack:
         attack_choice = st.selectbox(
             "Channel Eavesdropping / Threat Model",
-            ["None (Ideal Secure Channel)", "Intercept-Resend Attack"]
+            [
+                "None (Ideal Secure Channel)",
+                "Intercept-Resend Attack (Quantum Channel)",
+                "Man-in-the-Middle Attack (Channel & Classical Relay)"
+            ]
         )
 
     with col_qubits:
-        qubit_count = st.slider("Qubit / Pair Count", min_value=12, max_value=48, value=24, step=4)
+        qubit_count = st.slider(
+            "Qubit / Pair Count",
+            min_value=12, max_value=120, value=24, step=4,
+            help="Higher count (e.g. 60-100) provides tighter statistical convergence for CHSH Bell tests."
+        )
 
-    # Attack & Noise Sliders
+    # Attack & Noise Configuration
     col_noise, col_param = st.columns(2)
     with col_noise:
         noise_level = st.slider(
@@ -49,11 +56,18 @@ def render_simulator_view():
         )
 
     with col_param:
-        if attack_choice == "Intercept-Resend Attack":
+        if "Intercept-Resend" in attack_choice:
             eve_intensity = st.slider(
                 "Eve Interception Rate",
                 min_value=0.1, max_value=1.0, value=1.0, step=0.1,
-                help="Fraction of flying qubits intercepted and measured by Eve."
+                help="Fraction of flying qubits intercepted and measured by Eve in transit."
+            )
+        elif "Man-in-the-Middle" in attack_choice:
+            auth_mode = st.radio(
+                "Classical Channel Authentication",
+                ["Unauthenticated Channel (Vulnerable to MitM)", "Hybrid Authenticated Channel (Wegman-Carter)"],
+                index=0,
+                help="Wegman-Carter universal hashing prevents Eve from impersonating Alice or Bob during basis reconciliation."
             )
         else:
             st.info("💡 Secure channel configured. No adversary injected.")
@@ -63,8 +77,22 @@ def render_simulator_view():
 
     if run_btn:
         with st.spinner("Preparing states and executing quantum circuit on AerSimulator..."):
+            # Handle Man-in-the-Middle Attack route
+            if "Man-in-the-Middle" in attack_choice:
+                from attacks.mitm import MitMAttack
+                is_auth = ("Hybrid Authenticated" in auth_mode)
+                mitm_runner = MitMAttack(tamper_message=True, modified_text="MALICIOUS TAMPERED TRANSACTION: $1,000,000 TO EVE")
+                mitm_res = mitm_runner.execute_attack(
+                    num_qubits=qubit_count,
+                    original_plaintext="AUTHORIZE TRANSFER: $500,000 TO ACCT #8841",
+                    is_authenticated=is_auth,
+                    auth_key="PRESHARED_SECRET_SEED_2026"
+                )
+                render_mitm_inline_results(mitm_res)
+                return
+
             attack_obj = None
-            if attack_choice == "Intercept-Resend Attack":
+            if "Intercept-Resend" in attack_choice:
                 attack_obj = InterceptResendAttack(intercept_prob=eve_intensity)
 
             # Route to selected protocol
@@ -80,17 +108,7 @@ def render_simulator_view():
                 runner = E91Protocol()
                 res = runner.run(num_pairs=qubit_count, attack=attack_obj, noise_level=noise_level)
                 render_e91_results(res)
-            else:
-                hybrid_engine = HybridAuthEngine()
-                atk_type = "Intercept-Resend" if attack_choice == "Intercept-Resend Attack" else None
-                atk_p = eve_intensity if attack_choice == "Intercept-Resend Attack" else 0.0
-                res = hybrid_engine.run_hybrid_session(
-                    num_qubits=qubit_count,
-                    noise_level=noise_level,
-                    attack_type=atk_type,
-                    attack_param=atk_p
-                )
-                render_hybrid_results(res)
+
 
 
 def render_bb84_results(res):
@@ -172,21 +190,32 @@ def render_b92_results(res):
 
     with st.expander("🔍 B92 Conclusive vs Inconclusive Measurement Log", expanded=True):
         b92_basis_desc = {0: "Basis 0 (Test |1⟩)", 1: "Basis 1 (Test |−⟩)"}
+        eve_bases = res.intercept_result.eve_bases if res.intercept_result else [None]*res.num_qubits
+        eve_bits = res.intercept_result.eve_bits if res.intercept_result else [None]*res.num_qubits
+
         df_data = []
         for i in range(res.num_qubits):
             is_conc = res.bob_conclusive[i]
             inferred = res.bob_inferred_bits[i]
             is_err = is_conc and (res.alice_bits[i] != inferred)
-            df_data.append({
+            row = {
                 "Qubit #": i,
                 "Alice Bit": res.alice_bits[i],
                 "Alice State": res.alice_states[i],
+            }
+            if res.intercept_result:
+                was_int = res.intercept_result.intercepted[i]
+                row["Eve Intercepted?"] = "👿 YES" if was_int else "—"
+                row["Eve Basis"] = ("Z" if eve_bases[i] == 0 else "X") if was_int else "—"
+                row["Eve Measured"] = eve_bits[i] if (was_int and eve_bits[i] is not None) else "—"
+            row.update({
                 "Bob Test Operator": b92_basis_desc[res.bob_bases[i]],
                 "Bob Measurement": res.bob_raw_measurements[i],
                 "Detection Result": "✅ CONCLUSIVE" if is_conc else "⚪ Inconclusive",
                 "Bob Inferred Bit": inferred if is_conc else "—",
                 "Match Status": "🚨 ERROR" if is_err else ("✅ Match" if is_conc else "—")
             })
+            df_data.append(row)
         st.dataframe(pd.DataFrame(df_data), use_container_width=True, height=280)
 
     with st.expander("⚡ Quantum Circuit Visualization (Qiskit MPL)", expanded=False):
@@ -210,12 +239,21 @@ def render_e91_results(res):
 
     st.info(res.chsh_result.security_verdict)
 
+    if res.intercept_result:
+        st.warning(
+            f"👿 **Adversary Interception:** Eve intercepted {res.intercept_result.qubits_intercepted_count} of {res.num_pairs} transiting photons ({res.intercept_result.interception_rate*100:.1f}%), "
+            f"collapsing entanglement and breaking Bell inequality violation!"
+        )
+
+    if res.num_pairs < 48:
+        st.caption("💡 *Tip: CHSH Bell evaluation tests 4 correlation terms over 9 random basis combinations. For high statistical certainty (|S| > 2.0 with minimal variance), increase pair count to ≥ 60–100.*")
+
     with st.expander("🔍 CHSH Correlation Terms & Key Basis Alignment", expanded=True):
         col_chsh, col_table = st.columns([1, 1.4])
         with col_chsh:
             st.markdown("**CHSH 4-Correlation Components:**")
             for term, val in res.chsh_result.correlation_terms.items():
-                st.write(f"- `{term}`: **{val:+.3f}**")
+                st.write(f"- `{term}`: **{val:+.3f}** (samples: {res.chsh_result.sample_counts.get(term, 0)})")
             st.markdown(f"**Calculated |S|:** `{res.chsh_result.s_value:.4f}`")
             st.caption("Classical limit ≤ 2.0. Quantum maximum (Cirel'son bound) = 2.8284.")
         
@@ -234,17 +272,49 @@ def render_e91_results(res):
         st.pyplot(fig)
 
 
-def render_hybrid_results(res):
-    """Renders Adaptive Hybrid results."""
+def render_mitm_inline_results(mitm_res):
+    """Renders Man-in-the-Middle attack execution within the simulator."""
     st.markdown("---")
-    st.markdown(f"#### 🌐 Adaptive Hybrid Session Overview {render_badge(res.overall_security)}", unsafe_allow_html=True)
-    
-    st.info(f"**Adaptive Intelligence Verdict:** {res.adaptation_reason}")
+    st.markdown("#### 🚨 Man-in-the-Middle (MitM) Attack Simulation Results")
 
-    c1, c2, c3 = st.columns(3)
-    c1.metric("Selected Protocol", res.selected_protocol)
-    c2.metric("Classical Authentication", res.auth_scheme)
-    c3.metric("Key Recycling Status", "ACTIVE")
+    if mitm_res.is_authenticated and mitm_res.attack_detected:
+        st.success(mitm_res.status_summary)
+    else:
+        st.error(mitm_res.status_summary)
 
-    st.markdown("**MitM Security Check on Public Discussion:**")
-    st.success(res.mitm_test_result.status_summary)
+    # Key Exchange Comparison between the two legs
+    col1, col2 = st.columns(2)
+    with col1:
+        st.markdown("##### 🔗 Leg 1: Alice ↔ Eve (Eve poses as Bob)")
+        leg1 = mitm_res.alice_eve_exchange
+        st.write(f"**Sifted Key K_AE ({len(leg1.sifted_sender)} bits):** `{''.join(str(b) for b in leg1.sifted_sender)}`")
+        st.write(f"**Leg 1 QBER:** {leg1.qber*100:.1f}% (No error between Alice and Eve!)")
+    with col2:
+        st.markdown("##### 🔗 Leg 2: Eve ↔ Bob (Eve poses as Alice)")
+        leg2 = mitm_res.eve_bob_exchange
+        st.write(f"**Sifted Key K_EB ({len(leg2.sifted_receiver)} bits):** `{''.join(str(b) for b in leg2.sifted_receiver)}`")
+        st.write(f"**Leg 2 QBER:** {leg2.qber*100:.1f}% (No error between Eve and Bob!)")
+
+    # Message Relay & Tampering Visualization
+    st.markdown("##### ✉️ Message Interception & Decryption Relay")
+    col_a, col_e, col_b = st.columns(3)
+    with col_a:
+        st.markdown("###### 👩‍🦰 Alice Transmits")
+        st.text_area("Original Plaintext", value=mitm_res.original_plaintext, disabled=True, height=90)
+    with col_e:
+        st.markdown("###### 👿 Eve Intercepts & Modifies")
+        eve_msg = mitm_res.forged_message if mitm_res.forged_message else "(Blocked before transmission)"
+        st.text_area("Eve's Forged Message", value=eve_msg, disabled=True, height=90)
+    with col_b:
+        st.markdown("###### 🧔 Bob Receives")
+        bob_msg = mitm_res.bob_received_message if mitm_res.bob_received_message else "(Connection Terminated - Tampering Blocked!)"
+        st.text_area("Bob's Decrypted Message", value=bob_msg, disabled=True, height=90)
+
+    # Classical Channel Authentication
+    st.markdown("##### 🛡️ Classical Authentication Status")
+    c_tag1, c_tag2 = st.columns(2)
+    with c_tag1:
+        st.write(f"**Alice's Basis Auth Tag:** `{mitm_res.alice_auth_tag}`")
+    with c_tag2:
+        st.write(f"**Eve's Forged Tag Attempt:** `{mitm_res.eve_auth_tag_attempt}`")
+

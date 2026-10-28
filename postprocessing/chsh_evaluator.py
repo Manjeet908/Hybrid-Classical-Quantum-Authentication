@@ -62,7 +62,7 @@ class CHSHEvaluator:
         sample_counts: Dict[str, int] = {}
         pair_labels = ["E(a1,b1)", "E(a1,b3)", "E(a3,b1)", "E(a3,b3)"]
         
-        # Gather samples for each of the 4 test configurations
+        # Calculate correlation for each of the 4 Bell test configurations
         for (a_idx, b_idx), label in zip(chsh_pairs, pair_labels):
             a_sub = []
             b_sub = []
@@ -70,52 +70,48 @@ class CHSHEvaluator:
                 if alice_bases[i] == a_idx and bob_bases[i] == b_idx:
                     a_sub.append(alice_bits[i])
                     b_sub.append(bob_bits[i])
-            
-            sample_counts[label] = len(a_sub)
-            if len(a_sub) >= 4:
+
+            n_samples = len(a_sub)
+            sample_counts[label] = n_samples
+
+            if n_samples > 0:
+                # Direct empirical calculation from measured qubit outcomes
                 correlations[label] = cls.calculate_correlation(a_sub, b_sub)
             else:
-                # If sample size in small simulation is too low, use quantum state expectation value
-                # with injected noise/attack degradation
+                # Edge case: 0 samples observed in a very small run
+                # Compute expectation value for Phi+ under current channel conditions
+                phase = np.pi / 4.0 if "a1,b1" in label or "a3,b3" in label else 3.0 * np.pi / 4.0
+                theoretical_e = np.cos(phase) * (1.0 - 2.0 * noise_level)
                 if is_attacked:
-                    # Eve collapses entanglement: correlation drops to classical bound <= sqrt(2)
-                    base_e = 0.35 * (1.0 - noise_level)
-                    correlations[label] = base_e if "a1,b3" not in label else -base_e
-                else:
-                    # Maximal quantum violation: cos(pi/4) = 1/sqrt(2) approx 0.7071
-                    ideal = 1.0 / np.sqrt(2) * (1.0 - 2.0 * noise_level)
-                    correlations[label] = ideal if "a1,b3" not in label else -ideal
+                    theoretical_e *= 0.5  # Eve's projection reduces correlation by 50%
+                correlations[label] = float(theoretical_e)
 
-        # S = E(a1,b1) - E(a1,b3) + E(a3,b1) + E(a3,b3)
-        e1 = correlations.get("E(a1,b1)", 0.7071)
-        e2 = correlations.get("E(a1,b3)", -0.7071)
-        e3 = correlations.get("E(a3,b1)", -0.7071)
-        e4 = correlations.get("E(a3,b3)", 0.7071)
-        
-        s_candidates = [
-            abs(e1 - e2 - e3 + e4),
-            abs(e1 - e2 + e3 + e4),
-            abs(e1 + e2 + e3 - e4),
-            abs(e1 + e2 - e3 + e4)
-        ]
-        s_val = max(s_candidates)
-        if is_attacked:
-            s_val = min(1.414 + 0.3 * (1.0 - noise_level), 1.95)
+        # Standard Ekert-CHSH Bell Parameter:
+        # S = E(a1, b1) - E(a1, b3) - E(a3, b1) + E(a3, b3)
+        # For |Phi+>: E(a1, b1)=+1/sqrt(2), E(a1, b3)=-1/sqrt(2), E(a3, b1)=-1/sqrt(2), E(a3, b3)=+1/sqrt(2)
+        # Ideal S = 1/sqrt(2) - (-1/sqrt(2)) - (-1/sqrt(2)) + 1/sqrt(2) = 4/sqrt(2) = 2*sqrt(2) ≈ 2.8284
+        e1 = correlations.get("E(a1,b1)", 0.0)
+        e2 = correlations.get("E(a1,b3)", 0.0)
+        e3 = correlations.get("E(a3,b1)", 0.0)
+        e4 = correlations.get("E(a3,b3)", 0.0)
+
+        # Pure empirical calculation from actual quantum measurements
+        s_val = abs(e1 - e2 - e3 + e4)
         s_val = float(np.clip(s_val, 0.0, 2.8284))
-        
+
         violated = s_val > 2.0
-        
+
         if violated:
             verdict = (
                 f"✅ BELL INEQUALITY VIOLATED (|S| = {s_val:.3f} > 2.0). "
-                f"Entanglement confirmed intact! Quantum channel is completely secure against eavesdropping."
+                f"Quantum non-locality & entanglement confirmed intact. Channel is free from eavesdropping."
             )
         else:
             verdict = (
                 f"🚨 BELL INEQUALITY SATISFIED (|S| = {s_val:.3f} ≤ 2.0). "
-                f"Quantum entanglement broken! Classical state or Eavesdropper detected! ABORT SESSION."
+                f"Entanglement collapsed to classical correlation (separable state). Eavesdropper or severe noise detected! ABORT SESSION."
             )
-            
+
         return CHSHResult(
             s_value=s_val,
             is_violated=violated,
@@ -125,3 +121,4 @@ class CHSHEvaluator:
             sample_counts=sample_counts,
             security_verdict=verdict
         )
+
