@@ -1,0 +1,37 @@
+core/qiskit_engine.py
+
+
+Q1: Why Matrix Product State (MPS)?
+
+Quantum simulators in Qiskit offer multiple simulation methods, each with critical trade-offs:
+
+1. standard statevector: simulating N qubits requires 2^N complex amplitudes in RAM. Beyond ~30 qubits, standard machines run out of memory. 
+For two qubits, the state has four amplitudes:
+|ψ> = a00|00> + a01|01> + a10|10> + a11|11>
+
+2. stabilizer: Cannot simulate CNOT / non-Clifford gates
+
+3. MPS: MPS simulates 100+ QKD qubits in linear time O(N) with negligible memory overhead.
+
+Q2: Why seed?
+
+Basically an initialiser for random number generator, if we dont provide seed, we will get different result for same code, if we provide seed, we will get same result for same code.
+
+
+
+
+attacks/noise_channel.py
+
+
+
+Q1: What is noise?
+
+Noise can cause errors in the qubit states and measurement results. It can occur during 
+qubit storage, gate operations, or transmission.
+
+Common types of quantum noise:
+
+1. Bit-flip    : Changes the qubit from 0 to 1 or vice versa
+2. Phase-flip  : Changes the relative phase of the qubit
+3. Depolarizing: Randomly introduces bit or phase errors
+4. Amplitude damping: Models energy loss, such as a qubit transitioning from 1 to 0

@@ -15,6 +15,7 @@ import qiskit
 
 from ui.styles import QUANTUM_CSS, render_hero
 from ui.views_simulator import render_simulator_view
+from ui.views_analysis import render_analysis_view
 from ui.views_hybrid_auth import render_hybrid_auth_view
 from ui.views_theory import render_theory_view
 
@@ -32,8 +33,8 @@ st.markdown(QUANTUM_CSS, unsafe_allow_html=True)
 # Main Header Hero
 st.markdown(
     render_hero(
-        title="HYBRID QUANTUM AUTHENTICATION & QKD SUITE",
-        subtitle="Unified Qiskit simulation dashboard for BB84, B92, and E91 protocols with attack modeling and classical-quantum authentication."
+        title="Simulation and Comparative Analysis of Quantum Key Distribution Protocols Using Qiskit",
+        subtitle=""
     ),
     unsafe_allow_html=True
 )
@@ -45,6 +46,7 @@ with st.sidebar:
         "Select Dashboard Module",
         [
             "🔬 Protocol Simulator",
+            "📊 Protocol Analysis & Comparison",
             "🛡️ Hybrid Auth vs MitM",
             "📚 Theory & Academy"
         ],
@@ -70,6 +72,8 @@ with st.sidebar:
 # Route to selected view
 if nav_selection == "🔬 Protocol Simulator":
     render_simulator_view()
+elif nav_selection == "📊 Protocol Analysis & Comparison":
+    render_analysis_view()
 elif nav_selection == "🛡️ Hybrid Auth vs MitM":
     render_hybrid_auth_view()
 elif nav_selection == "📚 Theory & Academy":

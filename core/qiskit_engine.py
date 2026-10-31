@@ -1,6 +1,5 @@
 """
 Qiskit Simulation Engine: Minimal Matrix Product State (MPS) simulator 
-tailored for BB84, B92, and E91 QKD protocol execution.
 """
 from typing import Dict, List, Optional, Tuple
 from qiskit import QuantumCircuit
@@ -8,7 +7,6 @@ from qiskit_aer import AerSimulator
 
 
 class QiskitEngine:
-    """AerSimulator wrapper pre-configured with Matrix Product State for linear scaling."""
 
     def __init__(self, seed: Optional[int] = None):
         self.seed = seed
@@ -21,7 +19,7 @@ class QiskitEngine:
 
     def sample_registers(self, circuit: QuantumCircuit) -> Tuple[List[int], Optional[List[int]]]:
         """
-        Executes a 1-shot run and decodes classical bit registers in qubit index order.
+        Executes a 1-shot run of Quantum Circuit.
         Returns:
             (bob_bits, eve_bits) if Eve's register is present, otherwise (bob_bits, None).
         """
@@ -39,6 +37,6 @@ class QiskitEngine:
         return bob_bits, None
 
     def sample_measurement(self, circuit: QuantumCircuit) -> List[int]:
-        """Runs a 1-shot execution and returns the primary measured register bits (used by E91)."""
+        """Just for simplification purpose, runs circuit and ignores eve's result"""
         bob_bits, _ = self.sample_registers(circuit)
         return bob_bits

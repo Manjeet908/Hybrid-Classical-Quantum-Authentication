@@ -1,10 +1,5 @@
-"""
-Quantum Noise Channel: Simulates depolarizing noise, bit-flip, and optical attenuation.
-"""
-from typing import Optional
 import numpy as np
 from qiskit import QuantumCircuit
-from qiskit_aer.noise import NoiseModel
 
 class QuantumNoiseChannel:
     """Configurable physical channel noise model for quantum communication."""

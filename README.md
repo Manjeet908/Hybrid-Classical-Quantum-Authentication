@@ -56,6 +56,7 @@ quantum-auth-suite/
 ├── app.py                          # Main Streamlit Dashboard entry point
 ├── requirements.txt                # Dependency specifications
 ├── README.md                       # Comprehensive documentation
+├── README_HYBRID_AUTH_VS_MITM.md   # Deep-dive into Hybrid Auth vs. MitM concepts & code
 │
 ├── core/                           # Quantum Simulation Engine (Qiskit 2.5)
 │   ├── qiskit_engine.py            # AerSimulator wrapper (Matrix Product State)
@@ -76,12 +77,17 @@ quantum-auth-suite/
 ├── postprocessing/                 # Key Distillation & Security Verification
 │   ├── sifting.py                  # Basis reconciliation & inconclusive filters
 │   ├── chsh_evaluator.py           # CHSH S-parameter calculation (Cirel'son bound)
-│   └── privacy_amp.py              # Parity reconciliation & Shannon privacy amplification
+│   ├── privacy_amp.py              # Parity reconciliation & Shannon privacy amplification
+│   └── benchmark_evaluator.py      # Analytical modeling & multi-protocol benchmark runner
 │
-└── ui/                             # Streamlit UI & Visualizations
-    ├── styles.py                   # Cyberpunk dark theme CSS & tokens
-    ├── circuit_renderer.py         # Dynamic Qiskit MPL circuit diagram generator
-    ├── views_simulator.py          # Interactive single protocol lab
-    ├── views_hybrid_auth.py        # MitM vs Hybrid Authentication playground
-    └── views_theory.py             # Theory academy & mathematical proofs
+├── ui/                             # Streamlit UI & Visualizations
+│   ├── styles.py                   # Cyberpunk dark theme CSS & tokens
+│   ├── circuit_renderer.py         # Dynamic Qiskit MPL circuit diagram generator
+│   ├── views_simulator.py          # Interactive single protocol lab
+│   ├── views_analysis.py           # Protocol analysis & benchmark comparison suite
+│   ├── views_hybrid_auth.py        # MitM vs Hybrid Authentication playground
+│   └── views_theory.py             # Theory academy & mathematical proofs
+│
+└── tests/                          # Automated Unit & Verification Tests
+    └── test_benchmark_evaluator.py # Benchmark evaluator & analytical model tests
 ```
